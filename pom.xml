@@ -192,7 +192,7 @@
 					<systemProperties>
                         <property>
                             <name>providerClass</name>
-                            <value>org.dasein.cloud.terremark.Terremark</value>
+                            <value>${providerClass}</value>
                         </property>
 						<property>
 							<name>endpoint</name>
@@ -248,7 +248,7 @@
 						</property>
 					</systemProperties>
 					<excludes>
-						<exclude>**/TerremarkTestSuite.java</exclude>
+						<exclude>**/TestSuite.java</exclude>
 					</excludes>
 				</configuration>
 			</plugin>
