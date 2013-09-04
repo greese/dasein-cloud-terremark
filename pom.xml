@@ -248,7 +248,7 @@
 						</property>
 					</systemProperties>
 					<excludes>
-						<exclude>**/TestSuite.java</exclude>
+						<exclude>**/TerremarkTestSuite.java</exclude>
 					</excludes>
 				</configuration>
 			</plugin>
