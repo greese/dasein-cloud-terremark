@@ -244,10 +244,14 @@
 							<name>test.shareAccount</name>
 							<value>${test.shareAccount}</value>
 						</property>
+                        <property>
+                            <name>test.firewall</name>
+                            <value>${test.firewall}</value>
+                        </property>
 					</systemProperties>
-					<excludes>
-						<exclude>**/TerremarkTestSuite.java</exclude>
-					</excludes>
+					<includes>
+						<include>**/TerremarkTestSuite.java</include>
+					</includes>
 				</configuration>
 			</plugin>
 			<plugin>
