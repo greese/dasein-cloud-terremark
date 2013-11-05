@@ -20,10 +20,7 @@
 package org.dasein.cloud.terremark.network;
 
 import java.io.StringWriter;
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.Collections;
-import java.util.Locale;
+import java.util.*;
 
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
@@ -36,6 +33,8 @@ import javax.xml.transform.TransformerFactory;
 import javax.xml.transform.dom.DOMSource;
 import javax.xml.transform.stream.StreamResult;
 
+import org.apache.http.NameValuePair;
+import org.apache.http.message.BasicNameValuePair;
 import org.apache.log4j.Logger;
 import org.dasein.cloud.CloudException;
 import org.dasein.cloud.InternalException;
@@ -60,6 +59,9 @@ import org.dasein.cloud.terremark.Terremark;
 import org.dasein.cloud.terremark.TerremarkMethod;
 import org.dasein.cloud.terremark.TerremarkMethod.HttpMethodName;
 import org.dasein.util.CalendarWrapper;
+import org.dasein.util.Jiterator;
+import org.dasein.util.JiteratorPopulator;
+import org.dasein.util.PopulatorThread;
 import org.w3c.dom.Document;
 import org.w3c.dom.Element;
 import org.w3c.dom.Node;
@@ -514,30 +516,66 @@ public class FirewallRule extends AbstractFirewallSupport {
 	 * @throws InternalException an error occurred locally independent of any events in the cloud
 	 * @throws CloudException an error occurred with the cloud provider while performing the operation
 	 */
-	@Override
-	public @Nonnull Collection<org.dasein.cloud.network.FirewallRule> getRules(@Nonnull String firewallId) throws InternalException, CloudException {
-		Collection<org.dasein.cloud.network.FirewallRule> rules = new ArrayList<org.dasein.cloud.network.FirewallRule>();
-		String id = provider.getContext().getRegionId();
-		if (firewallId.equals(id)){
-			String url = "/" + FIREWALL_ACLS + "/" + EnvironmentsAndComputePools.ENVIRONMENTS + "/" + id;
-			TerremarkMethod method = new TerremarkMethod(provider, HttpMethodName.GET, url, null, null);
-			Document doc = method.invoke();
-			if (doc != null) {
-				NodeList firewallAclNodes = doc.getElementsByTagName(FIREWALL_ACL_TAG);
-				for (int i=0; i < firewallAclNodes.getLength(); i++) {
-					org.dasein.cloud.network.FirewallRule rule = toFirewallRule(firewallAclNodes.item(i));
-					if (rule != null) {
-						rules.add(rule);
-					}
-				}
+    @Override
+    public @Nonnull Collection<org.dasein.cloud.network.FirewallRule> getRules(@Nonnull String firewallId) throws InternalException, CloudException {
+        final String id = provider.getContext().getRegionId();
+        if (firewallId.equals(id)){
+            PopulatorThread<org.dasein.cloud.network.FirewallRule> populator = new PopulatorThread<org.dasein.cloud.network.FirewallRule>(new JiteratorPopulator<org.dasein.cloud.network.FirewallRule>() {
+                @Override
+                public void populate(@Nonnull Jiterator<org.dasein.cloud.network.FirewallRule> iterator) throws Exception {
+                    String url = "/" + FIREWALL_ACLS + "/" + EnvironmentsAndComputePools.ENVIRONMENTS + "/" + id;
+                    listPage(iterator, url, 1, 1000);
+                }
+            });
 
-			}
-		}
-		else {
-			rules = Collections.emptyList(); 
-		}
-		return rules;
-	}
+            populator.populate();
+            return populator.getResult();
+        }
+        throw new InternalException("Could not find requested firewall");
+    }
+
+    private void listPage(final Jiterator<org.dasein.cloud.network.FirewallRule> iterator, final String url, final int pageNumber, final int pageSize) throws CloudException, InternalException {
+        NameValuePair[] parameters = new NameValuePair[]{new BasicNameValuePair("page", pageNumber + ""), new BasicNameValuePair("pageSize", pageSize + "")};
+        TerremarkMethod method = new TerremarkMethod(provider, HttpMethodName.GET, url, parameters, null);
+        Document doc = method.invoke();
+        if(doc != null){
+            NodeList headMatches = doc.getElementsByTagName(FIREWALL_ACLS);
+            Collection<org.dasein.cloud.network.FirewallRule> next = null;
+
+            if(headMatches != null){
+                NodeList matches = doc.getElementsByTagName(FIREWALL_ACL_TAG);
+                if(matches != null){
+                    int currentPageSize = matches.getLength();
+
+                    if( currentPageSize >= pageSize ) {
+                        PopulatorThread<org.dasein.cloud.network.FirewallRule> populator = new PopulatorThread<org.dasein.cloud.network.FirewallRule>(new JiteratorPopulator<org.dasein.cloud.network.FirewallRule>() {
+                            @Override
+                            public void populate(@Nonnull Jiterator<org.dasein.cloud.network.FirewallRule> firewallRules) throws Exception {
+                                listPage(iterator, url, pageNumber + 1, pageSize);
+                            }
+                        });
+
+                        populator.populate();
+                        next = populator.getResult();
+                    }
+
+                    for (int i=0; i < matches.getLength(); i++) {
+                        org.dasein.cloud.network.FirewallRule rule = toFirewallRule(matches.item(i));
+                        if (rule != null) {
+                            iterator.push(rule);
+                        }
+                    }
+                }
+            }
+            if(next != null) {
+                Iterator<org.dasein.cloud.network.FirewallRule> it = next.iterator();
+
+                while(it.hasNext()) {
+                    it.next();
+                }
+            }
+        }
+    }
 
 	/**
 	 * Indicates the degree to which authorizations expect precedence of rules to be established.
